@@ -1,0 +1,125 @@
+{{define "content"}}
+<main>
+  <p class="crumb"><a href="/admin"><i class="ico fa-solid fa-arrow-left" aria-hidden="true"></i>All sites</a></p>
+  <h1>{{if .New}}Add a site{{else}}{{.Site.Name}}{{end}}</h1>
+  {{if .Error}}<div class="banner"><i class="ico fa-solid fa-circle-exclamation" aria-hidden="true"></i><span>{{.Error}}</span></div>{{end}}
+  {{if .Message}}<div class="banner ok"><i class="ico fa-solid fa-circle-check" aria-hidden="true"></i><span>{{.Message}}</span></div>{{end}}
+
+  {{if .Secret}}
+  <div class="secret">
+    <h2><i class="ico fa-solid fa-key" aria-hidden="true"></i>Here is the new api key</h2>
+    <p>Copy it now, into this site's <span class="mono">AJN_AUTH_API_KEY</span>. Only its hash is stored, so this is
+       the one and only time it can be read.</p>
+    <code>{{.Secret}}</code>
+  </div>
+  {{end}}
+
+  <form method="post" action="{{if .New}}/admin/sites{{else}}/admin/sites/{{.Site.ID}}{{end}}">
+    <div class="fields">
+      <div class="field">
+        <label for="id">Site id</label>
+        {{if .New}}
+          <input id="id" name="id" value="{{.Site.ID}}" placeholder="flight-log" pattern="[a-z0-9][a-z0-9-]{1,38}[a-z0-9]" required>
+        {{else}}
+          <input id="id" value="{{.Site.ID}}" disabled>
+          <p class="muted-small">The id is fixed. The send counters that cap how much email one address can be sent are keyed on it, so changing it would hand everybody a fresh allowance.</p>
+        {{end}}
+      </div>
+      <div class="field">
+        <label for="name">Name</label>
+        <input id="name" name="name" value="{{.Site.Name}}" placeholder="Flight Log" required>
+        <p class="muted-small">What the emails and the confirm page call it.</p>
+      </div>
+    </div>
+
+    <label for="base_url">Base url</label>
+    <input id="base_url" name="base_url" value="{{.Site.BaseURL}}" placeholder="https://flights.ajn.me" required>
+
+    <label for="redirect_uris">Redirect uris, one per line</label>
+    <textarea id="redirect_uris" name="redirect_uris" rows="3" placeholder="https://flights.ajn.me/auth/callback" required>{{lines .Site.RedirectURIs}}</textarea>
+    <p class="muted-small">The exact urls this site may be handed an exchange code at. Matched whole, never by prefix.</p>
+
+    <label for="mail_from">Sends as</label>
+    <input id="mail_from" name="mail_from" value="{{.Site.MailFrom}}" placeholder="Flight Log &lt;login@ajn.me&gt;" required>
+    <p class="muted-small">The domain has to be verified with Resend on the account this service holds the key for.</p>
+
+    <div class="fields">
+      <div class="field narrow">
+        <label for="accent">Email accent colour</label>
+        <input id="accent" name="accent" value="{{.Site.Accent}}" placeholder="#1d1d1f" pattern="#[0-9a-fA-F]{6}">
+      </div>
+      <div class="field">
+        <label for="subject">Subject line</label>
+        <input id="subject" name="subject" value="{{.Site.Subject}}" placeholder="Your sign in link for {{.Site.Name}}">
+      </div>
+    </div>
+
+    <label for="intro">Opening line in the email</label>
+    <input id="intro" name="intro" value="{{.Site.Intro}}" placeholder="Click the button below to finish signing in.">
+
+    <div class="row">
+      <input type="checkbox" id="disabled" name="disabled" {{if .Site.Disabled}}checked{{end}}>
+      <label for="disabled" style="margin:0">Disabled — stops this site sending anything, keeping its configuration and its send history</label>
+    </div>
+
+    <div class="field actions">
+      <button type="submit"><i class="ico fa-solid fa-floppy-disk" aria-hidden="true"></i>{{if .New}}Add the site{{else}}Save changes{{end}}</button>
+    </div>
+  </form>
+
+  {{if not .New}}
+  <div class="card">
+    <h2><i class="ico fa-solid fa-key" aria-hidden="true"></i>Api keys</h2>
+    <p>The key goes in the site's own environment as <span class="mono">AJN_AUTH_API_KEY</span>. Keep two live while you
+       deploy a rotation, then revoke the old one.</p>
+
+    {{if .Site.Keys}}
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Key</th><th>Note</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+          {{range .Site.Keys}}
+          <tr>
+            <td><span class="mono">{{.ID}}…</span></td>
+            <td>{{if .Note}}{{.Note}}{{else}}—{{end}}</td>
+            <td>{{stamp .Created}}</td>
+            <td class="right">
+              <form method="post" action="/admin/sites/{{$.Site.ID}}/keys/{{.ID}}/revoke">
+                <button class="link danger" type="submit"><i class="ico fa-solid fa-trash" aria-hidden="true"></i>Revoke</button>
+              </form>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}
+    <p>This site has no keys, so it cannot ask for a link. Generate one.</p>
+    {{end}}
+
+    <form method="post" action="/admin/sites/{{.Site.ID}}/keys">
+      <div class="fields">
+        <div class="field">
+          <label for="note">What is this key for?</label>
+          <input id="note" name="note" placeholder="cloud run">
+        </div>
+        <div class="field actions">
+          <button type="submit"><i class="ico fa-solid fa-plus" aria-hidden="true"></i>Generate a key</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <details class="card">
+    <summary><i class="ico fa-solid fa-triangle-exclamation" aria-hidden="true"></i>Remove this site</summary>
+    <p>Its configuration and every one of its keys go away. Links already in somebody's inbox stop working.
+       To stop it sending without losing any of that, disable it instead.</p>
+    <form method="post" action="/admin/sites/{{.Site.ID}}/delete">
+      <label for="confirm">Type the site id to confirm</label>
+      <input id="confirm" name="confirm" placeholder="{{.Site.ID}}" required>
+      <button class="link danger" type="submit"><i class="ico fa-solid fa-trash" aria-hidden="true"></i>Remove {{.Site.ID}}</button>
+    </form>
+  </details>
+  {{end}}
+</main>
+{{end}}

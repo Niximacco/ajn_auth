@@ -1,0 +1,128 @@
+# Builds a container, pushes it to Google Artifact Registry, and deploys it to
+# Cloud Run when a commit lands on main.
+#
+# A deploy is one container and nothing else: the pages, the stylesheet and both
+# email bodies are compiled into the binary. The running service talks to
+# datastore, to Secret Manager for the site roster, and to Resend - and to
+# nothing further.
+#
+# This one is in front of every other site's login, so a bad deploy here takes
+# sign in down everywhere at once. Nobody is signed out by it - the sessions are
+# the sites' own and this service is not in the path of a request that already
+# has one - but nobody new can get in until it is fixed.
+#
+# To configure this workflow:
+#
+# 1. Enable the APIs:
+#      Cloud Run          run.googleapis.com
+#      Artifact Registry  artifactregistry.googleapis.com
+#      Datastore          datastore.googleapis.com
+#      Secret Manager     secretmanager.googleapis.com
+#
+# 2. Create the Artifact Registry repository named by SERVICE below, in
+#    GAR_LOCATION.
+#
+# 3. Add two repository secrets (these are identifiers, not credentials):
+#      WIF_PROVIDER         the full workloadIdentityPools/.../providers/... name
+#      WIF_SERVICE_ACCOUNT  the deploy service account email
+#    and bind this repo to that service account with roles/iam.workloadIdentityUser
+#    on the principalSet for attribute.repository/<owner>/<repo>. The deploy
+#    account needs roles/run.admin (or run.developer), roles/artifactregistry.writer,
+#    and roles/iam.serviceAccountUser on the runtime service account. See the
+#    README for the exact commands.
+#
+# 4. The Cloud Run service's own runtime service account needs
+#    roles/datastore.user, and access to the secrets listed in the README. It
+#    also needs roles/secretmanager.secretAccessor AND
+#    roles/secretmanager.secretVersionAdder on the roster secret - the admin
+#    pages write a new version on every save, so read access alone leaves the
+#    editor unable to save anything.
+
+name: Build and Deploy to Cloud Run
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  PROJECT_ID: ajnhosting-163818
+  GAR_LOCATION: us-central1
+  SERVICE: ajn-auth
+  REGION: us-central1
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      # The tests cover the parts that are painful to debug in production: what
+      # a redirect uri is and is not allowed to be, the send caps that bound the
+      # email budget, that keys and tokens are only ever stored hashed, the
+      # route set registering, every template rendering, and the client the
+      # sites import.
+      - name: Test
+        run: go test ./...
+
+  deploy:
+    needs: test
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Keyless auth via Workload Identity Federation: GitHub mints a short-lived
+      # OIDC token, Google exchanges it for a token on the deploy service
+      # account. There is no long-lived JSON key to store or rotate. The
+      # id-token: write permission above is what lets this job mint that token.
+      - name: Google Auth
+        id: auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: '${{ env.PROJECT_ID }}'
+          workload_identity_provider: '${{ secrets.WIF_PROVIDER }}'
+          service_account: '${{ secrets.WIF_SERVICE_ACCOUNT }}'
+          # Needed so the Docker login below has a token to authenticate with.
+          token_format: 'access_token'
+
+      # With no JSON key, Docker signs in with the short-lived access token the
+      # auth step just produced rather than a _json_key password.
+      - name: Docker Auth
+        id: docker-auth
+        uses: 'docker/login-action@v3'
+        with:
+          username: oauth2accesstoken
+          password: '${{ steps.auth.outputs.access_token }}'
+          registry: '${{ env.GAR_LOCATION }}-docker.pkg.dev'
+
+      - name: Build and Push Container
+        run: |-
+          IMAGE="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE }}/${{ env.SERVICE }}"
+          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" ./
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE }}/${{ env.SERVICE }}:${{ github.sha }}
+
+      - name: Show Output
+        run: echo ${{ steps.deploy.outputs.url }}

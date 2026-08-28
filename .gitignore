@@ -1,0 +1,9 @@
+# Local configuration. The roster lives in Secret Manager; a copy on disk is for
+# running the service on a laptop and must never be committed - it carries the
+# hashes of every site's api keys.
+sites.json
+sites.local.json
+
+.env
+*.exe
+.idea/
