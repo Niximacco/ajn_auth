@@ -1,0 +1,66 @@
+{{define "content"}}
+<main class="wide">
+  {{if .Error}}<div class="banner"><i class="ico fa-solid fa-circle-exclamation" aria-hidden="true"></i><span>{{.Error}}</span></div>{{end}}
+  {{if .Message}}<div class="banner ok"><i class="ico fa-solid fa-circle-check" aria-hidden="true"></i><span>{{.Message}}</span></div>{{end}}
+
+  <div class="list-head">
+    <h1>Sites</h1>
+    <a class="button" href="/admin/sites/new"><i class="ico fa-solid fa-plus" aria-hidden="true"></i>Add a site</a>
+  </div>
+
+  {{if .Roster.Sites}}
+  <div class="scroll">
+    <table class="roster">
+      <thead>
+        <tr>
+          <th>Site</th>
+          <th>Signs in at</th>
+          <th>Sends as</th>
+          <th class="right">Keys</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Roster.Sites}}
+        <tr>
+          <td>
+            <strong>{{.Name}}</strong><br>
+            <span class="mono">{{.ID}}</span>
+            {{if .Disabled}}<span class="pill"><i class="ico fa-solid fa-ban" aria-hidden="true"></i>disabled</span>{{end}}
+          </td>
+          <td>
+            {{range .RedirectURIs}}<span class="mono">{{.}}</span><br>{{end}}
+          </td>
+          <td><span class="mono">{{.MailFrom}}</span></td>
+          <td class="right">{{len .Keys}}</td>
+          <td class="right"><a class="pill" href="/admin/sites/{{.ID}}"><i class="ico fa-solid fa-pen" aria-hidden="true"></i>Edit</a></td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  <div class="empty">
+    <h2>No sites yet</h2>
+    <p>Add one, generate it a key, and put that key in its environment.</p>
+    <a class="button" href="/admin/sites/new"><i class="ico fa-solid fa-plus" aria-hidden="true"></i>Add a site</a>
+  </div>
+  {{end}}
+
+  <details class="card">
+    <summary><i class="ico fa-solid fa-user-shield" aria-hidden="true"></i>Who can edit this</summary>
+    <p>These addresses can sign in here and change the roster. Everything else about who may sign in to a
+       <em>site</em> is that site's own business and is not stored here.</p>
+    <form method="post" action="/admin/admins">
+      <label for="admins">Admin addresses, one per line</label>
+      <textarea id="admins" name="admins" rows="4">{{lines .Roster.Admins}}</textarea>
+      <button type="submit"><i class="ico fa-solid fa-floppy-disk" aria-hidden="true"></i>Save admins</button>
+    </form>
+  </details>
+
+  <p class="muted-small">
+    Serving roster version {{version .Version}}{{if .Roster.Updated}}, last edited {{stamp .Roster.Updated}}{{if .Roster.UpdatedBy}} by {{.Roster.UpdatedBy}}{{end}}{{end}}.
+    Every save adds a version, so an edit that breaks something can be rolled back by pinning the previous one.
+  </p>
+</main>
+{{end}}

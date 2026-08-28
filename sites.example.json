@@ -1,0 +1,47 @@
+{
+  "admins": [
+    "you@example.com"
+  ],
+  "sites": [
+    {
+      "id": "flight-log",
+      "name": "Flight Log",
+      "base_url": "https://flights.ajn.me",
+      "redirect_uris": [
+        "https://flights.ajn.me/auth/callback"
+      ],
+      "mail_from": "Flight Log <login@ajn.me>",
+      "accent": "#1f6feb",
+      "keys": [
+        {
+          "id": "ajnauth_AbC123",
+          "hash": "replace me with a hash from the admin pages, never a key",
+          "note": "cloud run",
+          "created": 1740000000
+        }
+      ]
+    },
+    {
+      "id": "niximacco-recipes",
+      "name": "Niximacco Recipes",
+      "base_url": "https://niximacco.recipes",
+      "redirect_uris": [
+        "https://niximacco.recipes/auth/callback"
+      ],
+      "mail_from": "Niximacco Recipes <login@ajn.me>",
+      "intro": "Tap the button and the cookbook is yours again.",
+      "keys": []
+    },
+    {
+      "id": "wild-games",
+      "name": "Wild Games",
+      "base_url": "https://wildgames.ajn.me",
+      "redirect_uris": [
+        "https://wildgames.ajn.me/auth/callback",
+        "http://localhost:8080/auth/callback"
+      ],
+      "mail_from": "Wild Games <login@ajn.me>",
+      "keys": []
+    }
+  ]
+}

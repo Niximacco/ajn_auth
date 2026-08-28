@@ -1,0 +1,14 @@
+{{define "content"}}
+<main>
+  <h1><i class="ico fa-solid fa-key ico-accent" aria-hidden="true"></i> {{.ServiceName}}</h1>
+  <p>Enter your email and we will send you a link that signs you in. No password.</p>
+  {{if .Error}}<div class="banner"><i class="ico fa-solid fa-circle-exclamation" aria-hidden="true"></i><span>{{.Error}}</span></div>{{end}}
+  <form method="post" action="/admin/login">
+    <input type="hidden" name="next" value="{{.Next}}">
+    <label for="email">Email address</label>
+    <input id="email" type="email" name="email" value="{{.Email}}" placeholder="you@example.com" autocomplete="email" autofocus required>
+    <button class="block" type="submit"><i class="ico fa-solid fa-paper-plane" aria-hidden="true"></i>Email me a link</button>
+  </form>
+  <p class="muted-small">This is the sign in for the auth service itself. The sites it signs people in to have their own.</p>
+</main>
+{{end}}

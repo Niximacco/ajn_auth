@@ -1,0 +1,4 @@
+# Go is written with LF endings, and gofmt normalises to them. Without this a
+# Windows checkout writes CRLF into the files and every one of them shows up as
+# unformatted.
+* text=auto eol=lf

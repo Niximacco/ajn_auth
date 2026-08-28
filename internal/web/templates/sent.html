@@ -1,0 +1,11 @@
+{{define "content"}}
+<main>
+  <h1><i class="ico fa-solid fa-envelope-open-text ico-accent" aria-hidden="true"></i> Check your email</h1>
+  <p class="tight">If <strong>{{.Email}}</strong> can sign in here, a link is on its way.</p>
+  <p>It works once and expires in {{.ExpiresMinutes}} minutes.</p>
+  <div class="row">
+    <span class="who">Didn't arrive?</span>
+    <form method="get" action="/admin/login"><button class="link" type="submit">Try another address</button></form>
+  </div>
+</main>
+{{end}}

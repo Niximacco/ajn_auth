@@ -1,0 +1,539 @@
+/* ajn auth
+   ------------------------------------------------------------------------
+   One stylesheet for the whole service, served under a name that contains a
+   hash of its contents so it is fetched once and then never again.
+
+   It is written as tokens first and components second. Anything a page wants
+   to look different about should be a variable here rather than a style
+   attribute there.
+
+   It is the flight-log stylesheet with the map, the stats and the timeframe
+   taken out, because those are the parts of it that were about flights. What
+   is left is the furniture every one of these sites shares - and the confirm
+   page a visitor sees here is meant to feel like the site they came from, so
+   looking like the family is the point rather than a shortcut. */
+
+/* ---------------------------------------------------------------- tokens */
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces, furthest to nearest: the page, the cards on it, the things that
+     sit on a card, and a well for the things that sit under one. */
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --raised: #fafbfc;
+  --sunken: #eceff3;
+
+  --text: #141a21;
+  --muted: #5f6c7b;
+  --faint: #8e9aa8;
+  --line: #e0e5eb;
+  --line-strong: #c9d1da;
+
+  /* A green for the furniture: this service is not any of the sites it signs
+     people in to, and it should not be mistaken for one of them at a glance.
+     The confirm page overrides it per site, from the roster. */
+  --accent: #1a7f52;
+  --accent-hover: #14653f;
+  --accent-text: #ffffff;
+  --accent-weak: #e7f4ed;
+  --accent-line: #c7e5d5;
+
+  --error-bg: #fdecea;
+  --error-text: #a3251b;
+  --ok-bg: #e8f5ec;
+  --ok-text: #1c6b39;
+
+
+  --r-sm: 8px;
+  --r-md: 11px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(20, 26, 33, 0.05);
+  --shadow-md: 0 1px 3px rgba(20, 26, 33, 0.06), 0 6px 16px -6px rgba(20, 26, 33, 0.10);
+  --shadow-lg: 0 2px 6px rgba(20, 26, 33, 0.07), 0 18px 40px -18px rgba(20, 26, 33, 0.20);
+
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Keys, ids and timestamps line up when they are all the same width. */
+  --font-figures: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --page: 1180px;
+  --gutter: 24px;
+
+  /* 44px is the smallest thing a thumb hits reliably. */
+  --tap: 44px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e131a;
+    --surface: #171e27;
+    --raised: #1e262f;
+    --sunken: #0b1016;
+
+    --text: #eef2f6;
+    --muted: #9aa7b4;
+    --faint: #6f7d8b;
+    --line: #2a333d;
+    --line-strong: #3b4551;
+
+    --accent: #59a0ff;
+    --accent-hover: #7ab3ff;
+    --accent-text: #06182e;
+    --accent-weak: #14263c;
+    --accent-line: #1f3b5c;
+
+    --error-bg: #3a1a17;
+    --error-text: #ffb0a5;
+    --ok-bg: #12291d;
+    --ok-text: #8ed6a7;
+
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.45), 0 6px 16px -6px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.5), 0 18px 40px -18px rgba(0, 0, 0, 0.75);
+  }
+}
+
+/* ------------------------------------------------------------------ base */
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  padding: var(--gutter) var(--gutter) 64px;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Signed out pages are a single centred card; signed in pages are a page. */
+body.centred {
+  display: grid;
+  place-items: center;
+  padding: var(--gutter);
+}
+
+body.centred main {
+  width: min(420px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-lg);
+  padding: 32px;
+}
+
+main {
+  max-width: var(--page);
+  margin: 0 auto;
+}
+
+main.wide { max-width: var(--page); }
+
+h1 {
+  margin: 0 0 10px;
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+p { margin: 0 0 16px; color: var(--muted); }
+p.tight { margin-bottom: 6px; }
+p.crumb { margin-bottom: 8px; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+strong { color: var(--text); font-weight: 600; }
+
+.muted-small { color: var(--faint); font-size: 13px; }
+
+.spacer { flex: 1; }
+
+/* The icons. Every one sits beside its own label, so a kit that never loads
+   leaves a site with no icons on it rather than one with holes in it.
+
+   1.25em is the width of the widest glyph in the set - fa-user-shield,
+   fa-plane-departure, fa-users, fa-city. At 1em each of those overhangs its
+   box by two or three pixels and lands on the first letter of the label
+   beside it, which is what made the bar look squashed.
+
+   There is no ":empty" rule here any more. A kit configured for web fonts
+   draws its glyph from a ::before, which leaves the <i> element itself
+   childless - so :empty matched a loaded icon exactly as readily as a missing
+   one, and took the gap away from both. What separates the two instead is the
+   width: font mode makes these inline-block, and width does nothing at all to
+   the plain inline <i> a kit that never arrives leaves behind. */
+.ico { margin-right: 7px; width: 1.25em; text-align: center; }
+.ico-accent { color: var(--accent); }
+.big { font-size: 34px; display: block; margin: 0 0 12px; }
+
+/* --------------------------------------------------------------- the bar */
+
+.bar {
+  max-width: var(--page);
+  margin: 0 auto 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.bar nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-weight: 700;
+  color: var(--text);
+  margin-right: 10px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.brand:hover { text-decoration: none; }
+
+/* A link keeps its own width and wraps onto a second row rather than being
+   squeezed: flex would otherwise shrink these past their labels, and a tab
+   narrower than the words in it is how "Flights" ends up under its own icon. */
+.tab {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: var(--r-pill);
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tab:hover { background: var(--sunken); color: var(--text); text-decoration: none; }
+.tab.on { background: var(--accent-weak); color: var(--accent); }
+
+.who {
+  color: var(--faint);
+  font-size: 13px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The same links along the bottom, for a phone. */
+.tabbar { display: none; }
+
+/* ------------------------------------------------------------- the forms */
+
+label {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+input, select, textarea {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  margin: 0 0 16px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  font: inherit;
+  font-size: 16px; /* Anything smaller and iOS zooms the page on focus. */
+}
+
+textarea { min-height: 0; resize: vertical; line-height: 1.5; }
+
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+input[type="checkbox"] { min-height: 0; height: 20px; width: 20px; accent-color: var(--accent); }
+
+button, .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap);
+  padding: 0 18px;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover, .button:hover { background: var(--accent-hover); text-decoration: none; }
+
+button.block, .button.block { width: 100%; }
+
+button.link {
+  background: none;
+  color: var(--muted);
+  padding: 0 8px;
+  min-height: 36px;
+  font-weight: 500;
+}
+
+button.link:hover { background: var(--sunken); color: var(--text); }
+button.link.danger { color: var(--error-text); }
+button.link.danger:hover { background: var(--error-bg); }
+
+.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 18px;
+  margin: 0 0 22px;
+}
+
+.card summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.card[open] summary { margin-bottom: 16px; }
+
+.notes-card p { margin: 0; color: var(--text); white-space: pre-wrap; }
+
+/* A row of fields that wraps rather than scrolling, so the same form works on
+   a laptop and on a phone without a second layout. */
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 14px;
+  align-items: flex-start;
+}
+
+.field { flex: 1 1 200px; min-width: 0; }
+.field.narrow { flex: 0 1 150px; }
+.field.tiny { flex: 0 1 92px; }
+.field.actions { flex: 1 1 100%; display: flex; gap: 10px; align-items: center; }
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 14px;
+  margin: 0 0 18px;
+  background: var(--error-bg);
+  color: var(--error-text);
+  border-radius: var(--r-md);
+  font-size: 15px;
+}
+
+.banner.ok { background: var(--ok-bg); color: var(--ok-text); }
+
+/* ------------------------------------------------------------ the tables */
+
+.list-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 26px 0 12px;
+}
+
+.count {
+  background: var(--sunken);
+  border-radius: var(--r-pill);
+  padding: 2px 10px;
+}
+
+/* A table wider than the screen scrolls inside its own box rather than making
+   the whole page scroll sideways. */
+.scroll {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+th {
+  text-align: left;
+  padding: 12px 14px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--raised); }
+
+th.right, td.right { text-align: right; font-family: var(--font-figures); font-size: 14px; }
+th.right { font-family: var(--font-body); }
+
+table.roster td { vertical-align: top; }
+
+/* A key, an id, a redirect uri: something to be read exactly rather than
+   skimmed. */
+.mono { font-family: var(--font-figures); font-size: 13px; letter-spacing: 0.02em; word-break: break-all; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--r-pill);
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pill .ico { margin-right: 5px; }
+.pill:hover { text-decoration: none; background: var(--accent-line); }
+
+tr.editor td { background: var(--sunken); padding: 16px 14px; white-space: normal; }
+tr.editor:hover td { background: var(--sunken); }
+
+/* ------------------------------------------------------------- the empty */
+
+.empty {
+  text-align: center;
+  padding: 48px 24px;
+  background: var(--surface);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-lg);
+  color: var(--muted);
+}
+
+.empty h2 { margin: 0 0 8px; }
+.empty p { margin: 0 0 12px; }
+
+/* ------------------------------------------------------------ the phone */
+
+@media (max-width: 760px) {
+  :root { --gutter: 14px; }
+
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+
+  /* The links move to the bar along the bottom, so the top of the screen is
+     the page rather than the navigation. */
+  .bar nav .tab { display: none; }
+
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: space-around;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -2px 12px -6px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+  }
+
+  .tabbar a {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 2px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .tabbar a:hover { text-decoration: none; }
+  .tabbar a.on { color: var(--accent); }
+  .tabbar .ico { margin: 0; font-size: 16px; }
+
+  h1 { font-size: 22px; }
+
+}
+
+/* --------------------------------------------------------------- the key */
+
+/* A generated api key, shown once and never again. It is deliberately loud:
+   the one thing a person must not do here is close the page assuming they can
+   come back for it. */
+
+.secret {
+  margin: 0 0 20px;
+  padding: 16px;
+  background: var(--accent-weak);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-md);
+}
+
+.secret h2 { margin: 0 0 6px; font-size: 15px; }
+.secret p { margin: 0 0 10px; color: var(--text); font-size: 14px; }
+
+.secret code {
+  display: block;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-family: var(--font-figures);
+  font-size: 13px;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* ------------------------------------------------------------ the confirm */
+
+/* The one page a visitor who is not an admin ever sees. It carries the name of
+   the site they are signing in to, in that site's colour, because arriving at
+   a domain you did not type is exactly when a person should be told plainly
+   where they are and what is about to happen. */
+
+.site-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 6px 12px;
+  background: var(--accent-weak);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-pill);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
