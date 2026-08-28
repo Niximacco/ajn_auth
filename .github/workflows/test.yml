@@ -1,0 +1,32 @@
+# There is nothing to deploy here - this repository is one importable package.
+# The service that answers it is built and deployed from Niximacco/ajn_auth_service.
+#
+# What this checks is the one thing a library owes the sites that import it:
+# that it still compiles and still behaves, on every push and every pull
+# request. The tests run the client against a stubbed service, so they need no
+# credentials and no network.
+
+name: Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
