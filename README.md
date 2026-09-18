@@ -61,8 +61,9 @@ opinion about whether that person may sign in, and it does not hold a list that 
      │<──────────────────────┤                            │
 ```
 
-Steps 2 and 8 are the two calls this package makes. Everything else is the site's own code, or the
-service's.
+Steps 2 and 8 are the calls this package makes. Everything else is the site's own code, or the
+service's. A site that also lets people type the code from the email has a third call, which stands
+in for steps 4 to 8 — see [Or typing the code](#or-typing-the-code).
 
 Five things about that shape are deliberate.
 
@@ -181,6 +182,55 @@ func CompleteLogin(c *gin.Context) {
 
 Route it at whatever the site registered as its redirect uri, on `GET`.
 
+### Or typing the code
+
+The email also carries a six digit code, for somebody reading their mail on a phone and signing in on
+a laptop. Offering it is optional — a site that never calls `VerifyCode` just has emails with a code
+nobody can type anywhere — and it is one more form and one more handler.
+
+Put the form on the "check your email" page, carrying the address from the first form along with it:
+
+```html
+<form method="post" action="/login/code">
+  <input type="hidden" name="email" value="{{.Email}}">
+  <input type="hidden" name="next" value="{{.Next}}">
+  <label for="code">Code from the email</label>
+  <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" required>
+  <button type="submit">Sign in</button>
+</form>
+```
+
+Render that form for every address, not only the ones that are users. Leaving it off for an address
+that got no email would say which addresses are real, exactly as a different page for `Throttled`
+would.
+
+```go
+func CompleteLoginByCode(c *gin.Context) {
+	address := strings.TrimSpace(c.PostForm("email"))
+
+	identity, err := login.VerifyCode(c, address, c.PostForm("code"))
+	if err != nil {
+		page := web.New("Check your email")
+		page.Email = address
+		page.Next = web.SafeNext(c.PostForm("next"))
+		page.Error = "That code didn't work. Check it and try again, or ask for a new email."
+		web.Render(c, http.StatusUnauthorized, web.SentPage, page)
+		return
+	}
+
+	// From here on it is CompleteLogin: check the user list again, start a
+	// session, redirect to identity.Next.
+}
+```
+
+The address in the hidden field is the visitor's to change, and that is fine: a code only works for
+the address it was mailed to. Guessing is bounded by the service, not the site — five wrong guesses
+kill a code, and a new one costs an email, which the send caps limit. Spaces and dashes in what was
+typed are ignored.
+
+Clicking the link and typing the code spend the same thing, so whichever is used first, the other
+stops working. Only the most recent email's code works.
+
 ### What a site keeps
 
 Its `JWT_SIGNING_KEY`, its session cookie, its user kind, its roles. Those are per-site values that
@@ -202,7 +252,7 @@ reads them and datastore does not charge for a property nobody indexes.
 | `ErrNotConfigured` | No url or no api key. This site's configuration, not the visitor's fault. |
 | `ErrUnauthorized` | The api key was refused. Also this site's configuration. |
 | `ErrInvalidEmail` | The address is not a usable address. Worth showing on the form. |
-| `ErrBadCode` | Unknown, already redeemed, expired, or another site's. Offer a new link. |
+| `ErrBadCode` | Unknown, already redeemed, expired, or another site's. Offer a new link. From `VerifyCode`, also a mistyped code or one with too many wrong guesses — let them try again, and offer a new email. |
 | `ErrUnavailable` | The service could not be reached, or cannot send right now. Temporary. |
 
 ## The tests

@@ -183,6 +183,10 @@ func TestUnconfiguredFailsCleanly(t *testing.T) {
 		if _, err := client.Redeem(context.Background(), "a-code"); !errors.Is(err, ErrNotConfigured) {
 			t.Errorf("%+v: redeeming gave %v, want ErrNotConfigured", client, err)
 		}
+
+		if _, err := client.VerifyCode(context.Background(), "someone@example.com", "123456"); !errors.Is(err, ErrNotConfigured) {
+			t.Errorf("%+v: verifying gave %v, want ErrNotConfigured", client, err)
+		}
 	}
 }
 
@@ -197,5 +201,78 @@ func TestUnreachableIsUnavailable(t *testing.T) {
 
 	if _, err := client.RequestLink(context.Background(), "someone@example.com", ""); !errors.Is(err, ErrUnavailable) {
 		t.Errorf("an unreachable service gave %v, want ErrUnavailable", err)
+	}
+}
+
+func TestVerifyCode(t *testing.T) {
+	client, _, body := serve(t, http.StatusOK,
+		map[string]string{"email": "someone@example.com", "next": "/flights"})
+
+	identity, err := client.VerifyCode(context.Background(), "someone@example.com", " 123-456 ")
+	if err != nil {
+		t.Fatalf("verifying failed: %s", err.Error())
+	}
+
+	if identity.Email != "someone@example.com" || identity.Next != "/flights" {
+		t.Errorf("the identity was %+v", identity)
+	}
+
+	// The code goes out as bare digits, whatever the person typed around them.
+	if (*body)["email"] != "someone@example.com" || (*body)["code"] != "123456" {
+		t.Errorf("the request body was %v", *body)
+	}
+}
+
+// A wrong code and a refused key both answer 401, exactly as they do for
+// Redeem, and a site needs to tell a typo from its own misconfiguration.
+func TestVerifyCodeErrors(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		reply  map[string]string
+		want   error
+	}{
+		{"a wrong code", http.StatusUnauthorized,
+			map[string]string{"error": "this login could not be completed"}, ErrBadCode},
+		{"a refused key", http.StatusUnauthorized,
+			map[string]string{"error": "unauthorized"}, ErrUnauthorized},
+		{"rate limited", http.StatusTooManyRequests,
+			map[string]string{"error": "too many requests"}, ErrUnavailable},
+		{"an empty identity", http.StatusOK, map[string]string{}, ErrBadCode},
+	}
+
+	for _, test := range cases {
+		client, _, _ := serve(t, test.status, test.reply)
+
+		if _, err := client.VerifyCode(context.Background(), "someone@example.com", "123456"); !errors.Is(err, test.want) {
+			t.Errorf("%s: gave %v, want %v", test.name, err, test.want)
+		}
+	}
+}
+
+// Something that cannot be a code is refused here, without spending one of the
+// address's guesses at the service on it.
+func TestVerifyCodeRefusesJunkWithoutACall(t *testing.T) {
+	called := false
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+	defer server.Close()
+
+	client := &Client{BaseURL: server.URL, APIKey: "ajnauth_testkey", HTTP: server.Client()}
+
+	for _, code := range []string{"", "12345", "1234567", "12345a", "１２３４５６"} {
+		if _, err := client.VerifyCode(context.Background(), "someone@example.com", code); !errors.Is(err, ErrBadCode) {
+			t.Errorf("code %q gave %v, want ErrBadCode", code, err)
+		}
+	}
+
+	if called {
+		t.Error("a code that was never going to work was sent to the service")
+	}
+
+	if _, err := (&Client{}).VerifyCode(context.Background(), "someone@example.com", "abc"); !errors.Is(err, ErrNotConfigured) {
+		t.Errorf("an unconfigured client gave %v, want ErrNotConfigured", err)
 	}
 }

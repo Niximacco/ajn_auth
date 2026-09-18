@@ -17,6 +17,15 @@
 // with the site checking its own user list again on the way out of Redeem,
 // because access can be revoked while a link sits in an inbox.
 //
+// The same email also carries a six digit code, for a person who would rather
+// type than click - reading mail on a phone and signing in on a laptop, say. A
+// site that offers that has one more call, from a form of its own:
+//
+//	// on POST /login/code, with the address the link was sent to
+//	identity, err := client.VerifyCode(ctx, address, c.PostForm("code"))
+//
+// and it ends exactly where Redeem does. Using either one spends the other.
+//
 // It has no dependencies beyond the standard library, on purpose: it is
 // imported by every site, and a login should not be able to break because
 // something three levels down changed.
@@ -47,6 +56,10 @@ var (
 	// ErrBadCode means the code was unknown, already redeemed, expired, or
 	// belongs to another site. Show the visitor "that link didn't work" and
 	// offer them a new one.
+	//
+	// VerifyCode answers with it too, for a code that was mistyped, expired, or
+	// has had too many wrong guesses. Let the visitor try again, and offer a
+	// new email alongside.
 	ErrBadCode = errors.New("this login could not be completed")
 	// ErrUnavailable means the service could not be reached or answered that it
 	// cannot send right now. It is temporary and worth retrying.
@@ -90,12 +103,12 @@ type Client struct {
 	// with one callback should do: it keeps the value in one place, the roster.
 	RedirectURI string
 
-	// HTTP is the client used for the two calls. Leave it nil for a sensible
+	// HTTP is the client used for the calls. Leave it nil for a sensible
 	// default with a timeout on it.
 	HTTP *http.Client
 }
 
-// timeout bounds both calls. Requesting a link waits on Resend, which is the
+// timeout bounds every call. Requesting a link waits on Resend, which is the
 // slow one; redeeming a code is a datastore transaction and is quick.
 const timeout = 15 * time.Second
 
@@ -188,12 +201,69 @@ func (c *Client) RequestLink(ctx context.Context, address string, next string) (
 // sign in: check your own user list again here, because access can be revoked
 // while a link sits in an inbox.
 func (c *Client) Redeem(ctx context.Context, code string) (Identity, error) {
+	return c.identify(ctx, "/v1/exchange", map[string]string{"code": code})
+}
+
+// CodeLength is how many digits are in the code in the email.
+const CodeLength = 6
+
+// VerifyCode trades the six digit code from the email for the address behind
+// it. It is the typed alternative to the link, and it lands in the same place
+// Redeem does: an Identity, which the site checks against its own user list
+// before starting a session.
+//
+// address is the one the site asked for a link for. The code on its own is only
+// a million possibilities, so it is bound to that address and that site, it
+// stops working after a handful of wrong guesses, and only the most recent
+// email's code works. A site should keep the address from the first form - a
+// hidden field on the "check your email" page is enough - rather than ask for
+// it twice.
+//
+// Spaces and dashes are ignored, so "123 456" and "123-456" are the same code.
+// Anything that is not six digits after that is ErrBadCode without a call.
+func (c *Client) VerifyCode(ctx context.Context, address string, code string) (Identity, error) {
+	code = cleanCode(code)
+	if len(code) != CodeLength {
+		if !c.Configured() {
+			return Identity{}, ErrNotConfigured
+		}
+
+		return Identity{}, ErrBadCode
+	}
+
+	return c.identify(ctx, "/v1/codes", map[string]string{
+		"email": address,
+		"code":  code,
+	})
+}
+
+// cleanCode strips what a person or their mail client might have put between
+// the digits, and returns "" if what is left is not all digits.
+func cleanCode(code string) string {
+	var digits strings.Builder
+
+	for _, r := range code {
+		switch {
+		case r >= '0' && r <= '9':
+			digits.WriteRune(r)
+		case r == ' ' || r == '-' || r == '\t':
+		default:
+			return ""
+		}
+	}
+
+	return digits.String()
+}
+
+// identify makes one of the two calls that answer with an address, and maps the
+// reply the same way for both.
+func (c *Client) identify(ctx context.Context, path string, body map[string]string) (Identity, error) {
 	var reply struct {
 		Identity
 		Error string `json:"error"`
 	}
 
-	status, err := c.call(ctx, "/v1/exchange", map[string]string{"code": code}, &reply)
+	status, err := c.call(ctx, path, body, &reply)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -209,7 +279,8 @@ func (c *Client) Redeem(ctx context.Context, code string) (Identity, error) {
 	case http.StatusUnauthorized:
 		// Both a refused key and a spent code answer 401, and they are told
 		// apart by the body: a key problem is this site's, a code problem is
-		// the visitor's and is the ordinary case of a link used twice.
+		// the visitor's and is the ordinary case of a link used twice or a
+		// code mistyped.
 		if strings.Contains(reply.Error, "unauthorized") {
 			return Identity{}, ErrUnauthorized
 		}
